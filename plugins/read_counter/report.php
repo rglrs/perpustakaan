@@ -3,9 +3,19 @@
  * @Created by          : Drajat Hasan
  * @Date                : 2022-06-26 14:11:46
  * @File name           : index.php
+ * @Modified by         : Gemini (Google)
+ * @Modification Date   : 2024-05-20
+ * @Description         : Added duration, last_page, member_name filter, and fixed class loading error.
  */
 
-defined('INDEX_AUTH') OR die('Direct access not allowed!');
+// BAGIAN PENTING YANG DIPERBAIKI - Memuat file inti SLiMS
+define('INDEX_AUTH', 1);
+// Pastikan path ini benar, keluar 3 folder dari plugins/read_counter/
+require realpath(__DIR__ . '/../../') . '/sysconfig.inc.php'; 
+require SLiMS_LIB . 'admin_session.inc.php';
+require SLiMS_LIB . 'utility.inc.php';
+utility::checkAuthorised();
+// AKHIR DARI PERBAIKAN
 
 require MDLBS . 'reporting/report_dbgrid.inc.php';
 
@@ -31,16 +41,14 @@ if (!$reportView) {
         <input type="hidden" name="mod" value="<?= $_GET['mod'] ?>"/>
         <input type="hidden" name="report" value="yes"/>
         <div id="filterForm">
-            <!-- Copy me if you want to make your custom field -->
             <div class="form-group divRow">
                 <label><?= __('Title') ?></label>
                 <?php echo simbio_form_element::textField('text', 'title', '', 'class="form-control col-4"'); ?>
             </div>
             <div class="form-group divRow">
-                <label><?= __('Item Code') ?></label>
-                <?php echo simbio_form_element::textField('text', 'itemcode', '', 'class="form-control col-4"'); ?>
+                <label><?= __('Member Name') ?></label>
+                <?php echo simbio_form_element::textField('text', 'member_name', '', 'class="form-control col-4"'); ?>
             </div>
-            <!-- until here -->
             <div class="form-group divRow">
                 <label><?= __('Read Start'); ?></label>
                 <?php
@@ -72,59 +80,71 @@ if (!$reportView) {
     // create datagrid
     $reportgrid = new report_datagrid();
     $reportgrid->table_attr = 'class="s-table table table-sm table-bordered"';
-    $reportgrid->setSQLColumn("item_code AS '" . __('Item Code') . "'", "title AS '" . __('Title') . "'", "created_at AS '" . __('Input Date') . "'");
-    $reportgrid->setSQLorder('created_at DESC');
-//    $reportgrid->invisible_fields = array(0);
+    
+    $reportgrid->setSQLColumn(
+        "b.title AS '" . __('Title') . "'", 
+        "m.member_name AS '" . __('Member Name') . "'", 
+        "rc.read_count AS '" . __('Read Count') . "'", 
+        "rc.duration AS '" . __('Total Duration (s)') . "'", 
+        "rc.last_page AS '" . __('Last Page') . "'",
+        "rc.read_date AS '" . __('Last Read Date') . "'"
+    );
 
-    // is there any search
-    $criteria = 'title IS NOT NULL ';
+    $reportgrid->setSQLorder('rc.read_date DESC');
+
+    $criteria = 'b.title IS NOT NULL ';
 
     if (isset($_GET['title']) && !empty($_GET['title']))
     {
         $title = utility::filterData('title', 'get', true, true, true);
-        $criteria .=  ' AND title like \'%' . $title . '%\'';
+        $criteria .=  ' AND b.title like \'%' . $title . '%\'';
     }
 
-    if (isset($_GET['itemcode']) && !empty($_GET['itemcode']))
+    if (isset($_GET['member_name']) && !empty($_GET['member_name']))
     {
-        $title = utility::filterData('itemcode', 'get', true, true, true);
-        $criteria .=  ' AND item_code = \'' . $title . '\'';
+        $member_name = utility::filterData('member_name', 'get', true, true, true);
+        $criteria .=  ' AND m.member_name like \'%' . $member_name . '%\'';
     }
 
-        // loan date
-        if (isset($_GET['startDate']) AND isset($_GET['untilDate'])) {
-            $criteria .= ' AND (TO_DAYS(created_at) BETWEEN TO_DAYS(\''.utility::filterData('startDate', 'get', true, true, true).'\') AND
-                TO_DAYS(\''.utility::filterData('untilDate', 'get', true, true, true).'\'))';
-        }
+    if (isset($_GET['startDate']) AND isset($_GET['untilDate'])) {
+        $criteria .= ' AND (DATE(rc.read_date) BETWEEN \''.utility::filterData('startDate', 'get', true, true, true).'\' AND
+            \''.utility::filterData('untilDate', 'get', true, true, true).'\')';
+    }
 
     if (isset($_GET['recsEachPage'])) {
         $recsEachPage = (integer)$_GET['recsEachPage'];
         $num_recs_show = ($recsEachPage >= 20 && $recsEachPage <= 200)?$recsEachPage:$num_recs_show;
     }
 
-    // table spec
-    $table_spec = 'read_counter';
+    $table_spec = 'read_counter as rc 
+        LEFT JOIN biblio as b ON rc.biblio_id = b.biblio_id 
+        LEFT JOIN member as m ON rc.uid = m.member_id';
 
-    // set group by
     $reportgrid->setSQLCriteria($criteria);
 
-    // show spreadsheet export button
     $reportgrid->show_spreadsheet_export = true;
     $reportgrid->spreadsheet_export_btn = '<a href="'.AWB.'modules/reporting/spreadsheet.php" class="s-btn btn btn-default">'.__('Export to spreadsheet format').'</a>';
 
-    // put the result into variables
     echo $reportgrid->createDataGrid($dbs, $table_spec, $num_recs_show);
 
     echo '<script type="text/javascript">'."\n";
     echo 'parent.$(\'#pagingBox\').html(\''.str_replace(array("\n", "\r", "\t"), '', $reportgrid->paging_set).'\');'."\n";
     echo '</script>';
 
-    $xlsquery = 'select item_code AS \'' . __('Item Code') . '\', title AS \'' . __('Title') . '\', created_at AS \'' . __('Input Date') . '\' from ' . $table_spec . ' WHERE '. $criteria;
-    // echo $xlsquery;
+    $xlsquery = 'SELECT 
+        b.title AS \'' . __('Title') . '\', 
+        m.member_name AS \'' . __('Member Name') . '\', 
+        rc.read_count AS \'' . __('Read Count') . '\', 
+        rc.duration AS \'' . __('Total Duration (seconds)') . '\', 
+        rc.last_page AS \'' . __('Last Page Read') . '\', 
+        rc.read_date AS \'' . __('Last Read Date') . '\' 
+        FROM ' . $table_spec . ' WHERE '. $criteria;
+
     unset($_SESSION['xlsdata']);
     $_SESSION['xlsquery'] = $xlsquery;
     $_SESSION['tblout'] = "read-counter-report";
     $content = ob_get_clean();
-    // include the page template
+    
     require SB.'/admin/'.$sysconf['admin_template']['dir'].'/printed_page_tpl.php';
 }
+

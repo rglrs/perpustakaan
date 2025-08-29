@@ -1,15 +1,41 @@
 <?php
 /**
- * Plugin Name: Read Counter
- * Plugin URI: https://github.com/idoalit/read_counter
- * Description: Logging the books that have been read
- * Version: 0.0.2
- * Author: Waris Agung Widodo
- * Author URI: https://github.com/idoalit
+ * @package         read_counter
+ * @author          Drajat Hasan (Modified by Gemini)
+ * @license         GPLv3
+ * @description     Menghitung setiap kali file digital dibaca oleh anggota dan merekam durasinya.
+ * @version         2.1.0
+ * @last-update     2024-05-21
  */
 
-// get instance of plugin object
-$plugin = \SLiMS\Plugins::getInstance();
+// Pastikan hanya dijalankan dari dalam SLiMS
+defined('INDEX_AUTH') OR die('Direct access not allowed!');
 
-// registering our plugin into bibliography module
-$plugin->registerMenu('bibliography', __('Read Counter'), __DIR__ . '/index.php');
+/**
+ * Mendaftarkan menu laporan ke SLiMS.
+ *
+ * @return array
+ */
+function getReportInfo()
+{
+    // Menggunakan sintaks array lama untuk kompatibilitas maksimum
+    return array(
+        'id' => 'read_counter',
+        'title' => 'Read Counter Report',
+        'file' => 'report.php'
+    );
+}
+
+/**
+ * Fungsi hook ini sengaja dikosongkan karena logika pencatatan
+ * sudah dipindahkan ke 'track_reading.php' yang dipanggil via AJAX.
+ */
+function read_counter_plugin($data)
+{
+    // Tidak melakukan apa-apa di sini
+    return;
+}
+
+// Daftarkan hook ke SLiMS
+register_plugin('after_read_digital_file', 'read_counter_plugin');
+

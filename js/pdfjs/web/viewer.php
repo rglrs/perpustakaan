@@ -463,6 +463,47 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 </div> <!-- outerContainer -->
 <div id="printContainer"></div>
+<script>
+    // Inisialisasi variabel
+    let startTime = new Date();
+    let lastPage = 1;
+    let biblioId = <?php echo (int) $_GET['biblio_id']; ?>;
+    let fileId = <?php echo (int) $_GET['fid']; ?>;
+
+    // Fungsi untuk mengirim data ke server
+    function sendTrackingData() {
+        let endTime = new Date();
+        let timeSpent = Math.round((endTime - startTime) / 1000); // dalam detik
+
+        // Kirim data menggunakan AJAX (jQuery)
+        $.ajax({
+            url: '<?php echo SWB_URL; ?>plugins/read_counter/track_reading.php',
+            type: 'POST',
+            data: {
+                biblio_id: biblioId,
+                file_id: fileId,
+                duration: timeSpent,
+                last_page: lastPage
+            },
+            success: function(response) {
+                console.log('Tracking:', response);
+                // Reset timer
+                startTime = new Date();
+            }
+        });
+    }
+
+    // Lacak perubahan halaman
+    PDFViewerApplication.eventBus.on('pagechanging', function (evt) {
+        lastPage = evt.pageNumber;
+        sendTrackingData();
+    });
+
+    // Lacak ketika viewer ditutup
+    window.addEventListener('beforeunload', function (e) {
+        sendTrackingData();
+    });
+</script>
 </body>
 </html>
 
